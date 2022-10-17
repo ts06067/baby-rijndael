@@ -162,6 +162,7 @@ def babyr_dec(block, key):
     D(a) = ri_1(ri_2(ri_3(ri_4(a))))
     ri_i(a) = Si(sigHat(ti * (a XOR km_i)))
         - at each round, XOR km_i -> multiply ti -> apply sigHat -> apply Si
+        - at round 1, just XOR km_0
     """
     return 0
 
