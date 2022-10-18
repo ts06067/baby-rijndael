@@ -1,5 +1,15 @@
+"""
+Test Cases
+"""
+
 enc_block_set = [0x5b69, 0x8f57]
 enc_key_set = [0x87b2, 0x5274]
+dec_block_set = [0xbf1a, 0xb9d8]
+dec_key_set = [0x9440, 0xcb37]
+
+"""
+Enc, Dec Operation
+"""
 
 def babyr_enc(block, key):
     """
@@ -24,7 +34,7 @@ def babyr_enc(block, key):
     """
     # Assume block size of 16 bits, default round No. 4.
 
-    # basic configuration
+    # basic configuration: T matrix
     t = [[1,0,1,0,0,0,1,1], [1,1,0,1,0,0,0,1], [1,1,1,0,1,0,0,0], [0,1,0,1,0,1,1,1], [0,0,1,1,1,0,1,0], [0,0,0,1,1,1,0,1], [1,0,0,0,1,1,1,0], [0,1,1,1,0,1,0,1]]
 
     # set bit mask
@@ -63,6 +73,59 @@ def babyr_enc(block, key):
         else:
             a = XOR_m(mult_m(t, sig_hat_operation(S_operation(a))), km_list[i], 4)
     return a
+
+def babyr_dec(block, key):
+    """
+    D(a) = ri_1(ri_2(ri_3(ri_4(a))))
+    ri_i(a) = Si(sigHat(ti * (a XOR km_i)))
+        - at each round, XOR km_i -> multiply ti -> apply sigHat -> apply Si
+        - at round 1, just XOR km_0
+    """
+
+    # basic configuration: Ti matrix
+    ti = [[0, 0, 1, 0, 0, 1, 0, 1], [1, 0, 0, 1, 1, 0, 1, 0], [1, 1, 0, 0, 1, 1, 0, 1], [0, 1, 0, 0, 1, 0, 1, 1], [0, 1, 0, 1, 0, 0, 1, 0], [1, 0, 1, 0, 1, 0, 0, 1], [1, 1, 0, 1, 1, 1, 0, 0], [1, 0, 1, 1, 0, 1, 0, 0]]
+
+    # set bit mask
+    m0 = 0xf000
+    m1 = 0x0f00
+    m2 = 0x00f0
+    m3 = 0x000f
+
+    # get state entries
+    h0 = (block & m0) >> 12
+    h1 = (block & m1) >> 8
+    h2 = (block & m2) >> 4
+    h3 = block & m3
+
+    # get key entries
+    k0 = (key & m0) >> 12
+    k1 = (key & m1) >> 8
+    k2 = (key & m2) >> 4
+    k3 = (key & m3)
+
+    # make state
+    a = [h0, h1, h2, h3]
+    k = [k0, k1, k2, k3]
+
+    #configure round keys km_0...4
+    #reverse the list for decryption
+    km_list = [get_key_m(k, i) + get_key_m(k, i+1) for i in range(8, -1, -2)]
+
+    # round operation
+    for i in range(5):
+        # final round
+        if i == 4:
+            a = XOR_m(a, km_list[i], 4)
+        # initial round
+        elif i == 0:
+            a = Si_operation(sig_hat_operation(XOR_m(a, km_list[i], 4)))
+        else:
+            a = Si_operation(sig_hat_operation(mult_m(ti, XOR_m(a, km_list[i], 4))))
+    return a
+
+"""
+Auxiliary functions
+"""
 
 def mult_m(t, x):
     # input: t: binary matrix 8*8, x: original
@@ -129,6 +192,12 @@ def S_operation(x):
         x[i] = S_table[x[i]]
     return x
 
+def Si_operation(x):
+    Si_table = [12, 13, 6, 2, 1, 8, 10, 9, 4, 14, 0, 3, 7, 15, 5, 11]
+    for i in range(len(x)):
+        x[i] = Si_table[x[i]]
+    return x
+
 def sig_hat_operation(x):
     # assume size 4
     tmp = x[1]
@@ -157,14 +226,20 @@ def get_key_m(key, key_id):
         else:
             return XOR_m(get_key_m(key, key_id-2), get_key_m(key, key_id-1), 2)
 
-def babyr_dec(block, key):
-    """
-    D(a) = ri_1(ri_2(ri_3(ri_4(a))))
-    ri_i(a) = Si(sigHat(ti * (a XOR km_i)))
-        - at each round, XOR km_i -> multiply ti -> apply sigHat -> apply Si
-        - at round 1, just XOR km_0
-    """
-    return 0
+def print_b(block):
+    char_table = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f']
+    res = ""
+    for x in block:
+        res += char_table[x]
+    return res
 
-for i in range(2):
-    print("encrypted block: ", babyr_enc(enc_block_set[i], enc_key_set[i]))
+
+"""
+Main function: Execute the test
+"""
+
+for i in range(len(enc_block_set)):
+    print("encrypted: ", print_b(babyr_enc(enc_block_set[i], enc_key_set[i])))
+
+for i in range(len(dec_block_set)):
+    print("decrypted: ", print_b(babyr_dec(dec_block_set[i], dec_key_set[i])))
